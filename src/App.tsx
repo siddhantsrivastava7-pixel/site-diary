@@ -77,16 +77,41 @@ export default function App() {
   }, []);
   useEffect(() => {
     const vv = window.visualViewport;
-    if (!vv) return;
+    const centerFocusedInput = () => {
+      const el = document.activeElement;
+      if (!(el instanceof HTMLElement) || (el.tagName !== 'INPUT' && el.tagName !== 'TEXTAREA')) return;
+      const container = el.closest('.modal-card, .screen');
+      if (container instanceof HTMLElement) {
+        const elRect = el.getBoundingClientRect();
+        const containerRect = container.getBoundingClientRect();
+        const offset = (elRect.top - containerRect.top) + container.scrollTop - (containerRect.height * 0.38) + (elRect.height / 2);
+        container.scrollTo({ top: Math.max(0, offset), behavior: 'smooth' });
+      }
+    };
     const syncViewport = () => {
+      if (!vv) return;
       document.documentElement.style.setProperty('--app-height', `${Math.round(vv.height)}px`);
-      document.documentElement.classList.toggle('keyboard-open', window.innerHeight - vv.height > 120);
-      if (vv.offsetTop > 0) window.scrollTo(0, 0);
+      document.documentElement.style.setProperty('--vv-top', `${Math.round(vv.offsetTop)}px`);
+      const kbOpen = window.innerHeight - vv.height > 120;
+      document.documentElement.classList.toggle('keyboard-open', kbOpen);
+      if (kbOpen) centerFocusedInput();
+    };
+    const onFocusIn = (e: FocusEvent) => {
+      const target = e.target;
+      if (target instanceof HTMLElement && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA')) {
+        setTimeout(centerFocusedInput, 120);
+        setTimeout(centerFocusedInput, 320);
+      }
     };
     syncViewport();
-    vv.addEventListener('resize', syncViewport);
-    vv.addEventListener('scroll', syncViewport);
-    return () => { vv.removeEventListener('resize', syncViewport); vv.removeEventListener('scroll', syncViewport); };
+    vv?.addEventListener('resize', syncViewport);
+    vv?.addEventListener('scroll', syncViewport);
+    document.addEventListener('focusin', onFocusIn);
+    return () => {
+      vv?.removeEventListener('resize', syncViewport);
+      vv?.removeEventListener('scroll', syncViewport);
+      document.removeEventListener('focusin', onFocusIn);
+    };
   }, []);
 
   useEffect(() => { currentDataRef.current = data; setStorageError(!saveDiary(data)); }, [data]);
@@ -435,6 +460,10 @@ function StarterSitesPicker({ onConfirm }: { onConfirm: (names: string[]) => voi
       <h3>Continue with your sites</h3>
       <p>Tap any site to remove or keep it, or add a new site below.</p>
     </div>
+    <div className="starter-add-row">
+      <input type="text" maxLength={120} value={customName} onChange={e => setCustomName(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addCustom(); } }} placeholder="Add another site name…" aria-label="Add another site name"/>
+      <button type="button" className="outline-button" disabled={!customName.trim()} onClick={addCustom}><Plus size={18}/> Add</button>
+    </div>
     <div className="starter-list">
       {options.map((name, i) => {
         const isPicked = selected.includes(name);
@@ -444,10 +473,6 @@ function StarterSitesPicker({ onConfirm }: { onConfirm: (names: string[]) => voi
           <span className={`starter-check ${isPicked ? 'checked' : ''}`}>{isPicked ? <Check size={17}/> : <Plus size={17}/>}</span>
         </button>;
       })}
-    </div>
-    <div className="starter-add-row">
-      <input type="text" maxLength={120} value={customName} onChange={e => setCustomName(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addCustom(); } }} placeholder="Add another site name…" aria-label="Add another site name"/>
-      <button type="button" className="outline-button" disabled={!customName.trim()} onClick={addCustom}><Plus size={18}/> Add</button>
     </div>
     <button type="button" className="primary-button full-width" disabled={chosenInOrder.length === 0} onClick={() => onConfirm(chosenInOrder)}>
       <CheckCircle2 size={21}/> {chosenInOrder.length > 0 ? `Continue with ${chosenInOrder.length} ${chosenInOrder.length === 1 ? 'site' : 'sites'}` : 'Select at least 1 site'}
