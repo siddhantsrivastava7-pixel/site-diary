@@ -144,7 +144,8 @@ export default function App() {
   const activeSites = data.sites.filter(s => s.active);
   const completeCount = activeSites.filter(s => data.days[day]?.[s.id]?.completed).length;
   const todayTotal = activeSites.reduce((acc, s) => acc + (data.days[day]?.[s.id]?.completed ? entryTotal(data.days[day][s.id]) : 0), 0);
-  const isReadyToShare = activeSites.length > 0 && completeCount === activeSites.length;
+  const allSitesComplete = activeSites.length > 0 && completeCount === activeSites.length;
+  const isReadyToShare = completeCount > 0;
   const completionPercent = activeSites.length ? Math.round((completeCount / activeSites.length) * 100) : 0;
   const [returnToEntry, setReturnToEntry] = useState<{ type: 'site'; siteId: string; date: string } | null>(null);
   const [returnToReport, setReturnToReport] = useState<string | null>(null);
@@ -328,7 +329,7 @@ export default function App() {
                 <div className="date-pill"><CalendarDays size={16}/>{friendlyDate(day)}</div>
                 <div className="hero-body"><div className="hero-copy"><span className="hero-sun"><Sun size={19}/> Hello there!</span><h2>Let's count<br/>today's team.</h2><p>One site at a time. You've got this!</p></div><img className="hero-worker" src="/illustrations/worker.svg" alt="Cheerful construction worker holding a clipboard"/></div>
               </div>
-              {activeSites.length > 0 && <div className="progress-card"><div className="progress-heading"><span><Sparkles size={16}/> Today's progress</span><strong>{completeCount} of {activeSites.length} sites done</strong></div><div className="progress-bar" aria-label={`${completionPercent}% completed`} role="progressbar" aria-valuenow={completionPercent} aria-valuemin={0} aria-valuemax={100}><div style={{ width: `${completionPercent}%` }}/></div><div className="stats-line"><span><Users size={17}/> {todayTotal} workers recorded</span>{isReadyToShare && <span className="all-done"><BadgeCheck size={17}/> All done!</span>}</div></div>}
+              {activeSites.length > 0 && <div className="progress-card"><div className="progress-heading"><span><Sparkles size={16}/> Today's progress</span><strong>{completeCount} of {activeSites.length} sites done</strong></div><div className="progress-bar" aria-label={`${completionPercent}% completed`} role="progressbar" aria-valuenow={completionPercent} aria-valuemin={0} aria-valuemax={100}><div style={{ width: `${completionPercent}%` }}/></div><div className="stats-line"><span><Users size={17}/> {todayTotal} workers recorded</span>{allSitesComplete && <span className="all-done"><BadgeCheck size={17}/> All done!</span>}</div></div>}
               <div className="section-row"><div><h2>My Sites <span className="section-count">{activeSites.length}</span></h2><p>{activeSites.length ? "Tap a site to enter today's counts" : 'Choose the sites you want to track'}</p></div><IconButton label="Add new site" className="header-add" onClick={() => setPanel({ type: 'addSite' })}><Plus size={24}/></IconButton></div>
               {activeSites.length === 0 ? <StarterSitesPicker onConfirm={addStarterSites}/> : <>
                 <div className="site-list">
@@ -342,7 +343,7 @@ export default function App() {
                 </div>
                 <button type="button" className="manage-sites-inline" onClick={() => setPage('sites')}><Building2 size={16}/> Add or remove sites</button>
               </>}
-              {activeSites.length > 0 && <div className="share-card"><div className="share-card-copy"><strong>{isReadyToShare ? 'All sites are ready! 🎉' : 'Ready to send your report?'}</strong><span>{isReadyToShare ? 'Your daily report is prepared.' : `${activeSites.length - completeCount} ${activeSites.length - completeCount === 1 ? 'site' : 'sites'} still to complete`}</span></div><button className="primary-button" type="button" disabled={!isReadyToShare} onClick={() => setPanel({ type: 'report', date: day })}><MessageCircle size={21}/> Review &amp; Share <ArrowRight size={18}/></button>{!isReadyToShare && <span className="share-tip">Finish every site (including zero-worker sites) to share.</span>}</div>}
+              {activeSites.length > 0 && <div className="share-card"><div className="share-card-copy"><strong>{allSitesComplete ? 'All sites are ready! 🎉' : isReadyToShare ? `${completeCount} of ${activeSites.length} sites ready to share` : 'Ready to send your report?'}</strong><span>{allSitesComplete ? 'Your full daily report is prepared.' : isReadyToShare ? 'Share a mid-day or partial report now, or finish more sites first.' : 'Finish at least one site to review and share your report.'}</span></div><button className="primary-button" type="button" disabled={!isReadyToShare} onClick={() => setPanel({ type: 'report', date: day })}><MessageCircle size={21}/> {allSitesComplete || !isReadyToShare ? 'Review & Share' : `Review & Share (${completeCount} ${completeCount === 1 ? 'site' : 'sites'})`} <ArrowRight size={18}/></button>{!isReadyToShare && <span className="share-tip">Finish at least 1 site to share. Unvisited sites are skipped automatically.</span>}</div>}
               <div className="sync-footnote"><ShieldCheck size={15}/>{status}. <button type="button" onClick={() => setPage('settings')}>Backup options</button></div>
             </>}
             {page === 'history' && <>
@@ -457,18 +458,18 @@ function ReportScreen({ date, day, data, onBack, onEdit, onToast }: { date: stri
   const report = useMemo(() => formatReport(data, date), [data, date]);
   const total = entries.reduce((sum, x) => sum + entryTotal(x.entry), 0);
   const current = date === day;
-  const incomplete = current && data.sites.some(s => s.active && !data.days[date]?.[s.id]?.completed);
+  const unvisitedCount = current ? data.sites.filter(s => s.active && !data.days[date]?.[s.id]?.completed).length : 0;
   const copy = async () => { try { await navigator.clipboard.writeText(report); onToast('Report copied!'); } catch { onToast('Copy not supported here. Try WhatsApp instead.'); } };
   return <><header className="sub-header"><IconButton label="Back" onClick={onBack}><ArrowLeft size={24}/></IconButton><span>Review Report</span><div className="header-spacer"/></header>
     <main className="screen scroll-screen report-screen">
       <div className="report-hero"><div className="date-pill"><CalendarDays size={16}/>{friendlyDate(date)}</div><div className="report-hero-summary"><div className="report-stat"><div className="report-stat-icon green"><Check size={23}/></div><strong>{entries.length}</strong><span>Sites completed</span></div><div className="report-stat"><div className="report-stat-icon orange"><Users size={23}/></div><strong>{total}</strong><span>Total workers</span></div></div></div>
-      {incomplete && <div className="notice warn"><Info size={19}/> Some sites are not finished. Complete them before sharing today's report.</div>}
+      {unvisitedCount > 0 && <div className="notice warn"><Info size={19}/> Showing {entries.length} completed {entries.length === 1 ? 'site' : 'sites'}. {unvisitedCount} unvisited {unvisitedCount === 1 ? 'site is' : 'sites are'} skipped and can be added later.</div>}
       <div className="section-row report-section"><div><h2>Site Summary</h2><p>Check everything before sending</p></div><FileText size={23} color="#94a1ad"/></div>
       <div className="report-sites">{entries.map(({ site, entry }, i) => <button type="button" className="report-site" key={site.id} onClick={() => onEdit(site.id)}><div className={`report-index ${i % 2 === 0 ? 'green' : 'orange'}`}>{i + 1}</div><div className="report-site-info"><strong>{entry.siteName || site.name}</strong><span>{entry.noWorkers ? 'No workers today' : Object.entries(entry.counts).filter(([, n]) => n > 0).map(([cid, n]) => `${entry.categoryNames?.[cid] || data.categories.find(c => c.id === cid)?.name || 'Team'} ${n}`).join(' · ') || 'No workers today'}</span><b>Total: {entryTotal(entry)}</b>{entry.remarks.trim() && <em>📝 {entry.remarks}</em>}</div><ChevronRight size={20}/></button>)}</div>
       {!entries.length && <div className="empty-block compact-empty"><div className="big-emoji">📋</div><h3>No completed sites yet</h3><p>Finish a site and its information will appear here.</p></div>}
       <div className="message-preview"><div className="preview-title"><MessageCircle size={18}/> WhatsApp message preview</div><div className="chat-bubble">{report.split('\n').map((line, i) => <div key={i} className={`chat-line ${line.startsWith('*') ? 'chat-bold' : ''}`}>{line.replaceAll('*', '') || '\u00a0'}</div>)}</div></div>
       <p className="report-helper">WhatsApp opens with your report prepared. Choose the head office chat and tap Send.</p>
     </main>
-    <div className="bottom-action report-actions"><button className="outline-button" type="button" disabled={incomplete || entries.length === 0} onClick={() => void copy()}><Copy size={20}/> Copy</button><button className="primary-button whatsapp-button" type="button" disabled={incomplete || entries.length === 0} onClick={() => window.open(`https://wa.me/?text=${encodeURIComponent(report)}`, '_blank', 'noopener,noreferrer')}><MessageCircle size={21}/> Send on WhatsApp</button></div>
+    <div className="bottom-action report-actions"><button className="outline-button" type="button" disabled={entries.length === 0} onClick={() => void copy()}><Copy size={20}/> Copy</button><button className="primary-button whatsapp-button" type="button" disabled={entries.length === 0} onClick={() => window.open(`https://wa.me/?text=${encodeURIComponent(report)}`, '_blank', 'noopener,noreferrer')}><MessageCircle size={21}/> Send on WhatsApp</button></div>
   </>;
 }

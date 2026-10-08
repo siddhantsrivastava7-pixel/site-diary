@@ -42,6 +42,23 @@ describe('daily diary behavior', () => {
     d.days['2026-10-08'] = { s: { ...emptyEntry(), noWorkers: true, completed: true } };
     expect(formatReport(d, '2026-10-08')).toContain('No workers today');
   });
+  it('supports mid-day / partial reports by including only completed sites and skipping unvisited ones', () => {
+    const d = emptyDiary();
+    d.sites = [
+      { id: 's1', name: 'Sethi Ji', active: true, createdAt: '2026-10-01T00:00:00.000Z' },
+      { id: 's2', name: 'Usha Singh', active: true, createdAt: '2026-10-01T00:00:00.001Z' },
+      { id: 's3', name: 'Kanodia Ji', active: true, createdAt: '2026-10-01T00:00:00.002Z' }
+    ];
+    d.days['2026-10-08'] = {
+      s1: { ...emptyEntry(), counts: { civil: 4 }, siteName: 'Sethi Ji', categoryNames: { civil: 'Civil' }, completed: true },
+      s2: { ...emptyEntry(), counts: { painter: 2 }, siteName: 'Usha Singh', completed: false }
+    };
+    const report = formatReport(d, '2026-10-08');
+    expect(report).toContain('Sethi Ji');
+    expect(report).not.toContain('Usha Singh');
+    expect(report).not.toContain('Kanodia Ji');
+    expect(report).toContain('GRAND TOTAL: 4 workers');
+  });
   it('rejects malformed backup payloads', () => {
     expect(() => validateDiary({ version: 1, sites: [], categories: [], days: { today: {} } })).toThrow();
     expect(() => validateDiary({ version: 2 })).toThrow();
