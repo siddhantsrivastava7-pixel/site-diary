@@ -75,6 +75,19 @@ export default function App() {
     document.addEventListener('visibilitychange', checkDay);
     return () => { window.clearInterval(timer); window.removeEventListener('focus', checkDay); document.removeEventListener('visibilitychange', checkDay); };
   }, []);
+  useEffect(() => {
+    const vv = window.visualViewport;
+    if (!vv) return;
+    const syncViewport = () => {
+      document.documentElement.style.setProperty('--app-height', `${Math.round(vv.height)}px`);
+      document.documentElement.classList.toggle('keyboard-open', window.innerHeight - vv.height > 120);
+      if (vv.offsetTop > 0) window.scrollTo(0, 0);
+    };
+    syncViewport();
+    vv.addEventListener('resize', syncViewport);
+    vv.addEventListener('scroll', syncViewport);
+    return () => { vv.removeEventListener('resize', syncViewport); vv.removeEventListener('scroll', syncViewport); };
+  }, []);
 
   useEffect(() => { currentDataRef.current = data; setStorageError(!saveDiary(data)); }, [data]);
   useEffect(() => {
@@ -445,13 +458,13 @@ function StarterSitesPicker({ onConfirm }: { onConfirm: (names: string[]) => voi
 function SiteForm({ site, onClose, onSubmit, onArchive }: { site?: Site; onClose: () => void; onSubmit: (name: string, location: string) => boolean; onArchive?: () => void }) {
   const [name, setName] = useState(site?.name || '');
   const [location, setLocation] = useState(site?.location || '');
-  return <Modal title={site ? 'Edit Site' : 'Add a New Site'} onClose={onClose}><form className="form-stack" onSubmit={e => { e.preventDefault(); onSubmit(name, location); }}><div className="form-illustration">🏡 <span>{site ? 'Make an update' : 'A new project!'}</span></div><label htmlFor="site-name">Site name <span className="required">*</span></label><input id="site-name" autoFocus required maxLength={120} value={name} onChange={e => setName(e.target.value)} placeholder="e.g. Sethi Ji"/><label htmlFor="site-location">Location / Address <span className="optional">Optional</span></label><input id="site-location" maxLength={200} value={location} onChange={e => setLocation(e.target.value)} placeholder="e.g. Civil Lines"/><p className="form-hint">Use a familiar name so the site is easy to recognize.</p><button className="primary-button" type="submit"><Check size={20}/> {site ? 'Save Changes' : 'Add Site'}</button>{site && onArchive && <button className="archive-button" type="button" onClick={onArchive}><Archive size={17}/> Remove from active sites</button>}</form></Modal>;
+  return <Modal title={site ? 'Edit Site' : 'Add a New Site'} onClose={onClose}><form className="form-stack" onSubmit={e => { e.preventDefault(); onSubmit(name, location); }}><div className="form-illustration">🏡 <span>{site ? 'Make an update' : 'A new project!'}</span></div><label htmlFor="site-name">Site name <span className="required">*</span></label><input id="site-name" required maxLength={120} value={name} onChange={e => setName(e.target.value)} placeholder="e.g. Sethi Ji"/><label htmlFor="site-location">Location / Address <span className="optional">Optional</span></label><input id="site-location" maxLength={200} value={location} onChange={e => setLocation(e.target.value)} placeholder="e.g. Civil Lines"/><p className="form-hint">Use a familiar name so the site is easy to recognize.</p><button className="primary-button" type="submit"><Check size={20}/> {site ? 'Save Changes' : 'Add Site'}</button>{site && onArchive && <button className="archive-button" type="button" onClick={onArchive}><Archive size={17}/> Remove from active sites</button>}</form></Modal>;
 }
 function CategoryForm({ category, onClose, onSubmit }: { category?: Category; onClose: () => void; onSubmit: (value: { name: string; icon: CategoryIcon; color: string }) => void }) {
   const [name, setName] = useState(category?.name || '');
   const [icon, setIcon] = useState<CategoryIcon>(category?.icon || 'worker');
   const [color, setColor] = useState(category?.color || 'mint');
-  return <Modal title={category ? 'Edit Team' : 'Add a Team or Contractor'} onClose={onClose}><form className="form-stack" onSubmit={e => { e.preventDefault(); onSubmit({ name, icon, color }); }}><label htmlFor="team-name">Team name <span className="required">*</span></label><input id="team-name" autoFocus required maxLength={80} value={name} onChange={e => setName(e.target.value)} placeholder="e.g. Plumber or Ramu"/><label>Choose an icon</label><div className="icon-picker">{colorOptions.map(it => <button type="button" className={icon === it.value ? 'picked' : ''} key={it.value} aria-label={it.name} title={it.name} onClick={() => setIcon(it.value)}><TeamGlyph kind={it.value}/></button>)}</div><label>Choose a color</label><div className="color-picker">{pickColors.map(c => <button type="button" key={c} title={c} aria-label={`Color ${c}`} aria-pressed={color === c} className={`color-${c} ${color === c ? 'picked' : ''}`} onClick={() => setColor(c)}>{color === c && <Check size={18}/>}</button>)}</div><button className="primary-button" type="submit"><Check size={19}/> {category ? 'Save Team' : 'Add Team'}</button></form></Modal>;
+  return <Modal title={category ? 'Edit Team' : 'Add a Team or Contractor'} onClose={onClose}><form className="form-stack" onSubmit={e => { e.preventDefault(); onSubmit({ name, icon, color }); }}><label htmlFor="team-name">Team name <span className="required">*</span></label><input id="team-name" required maxLength={80} value={name} onChange={e => setName(e.target.value)} placeholder="e.g. Plumber or Ramu"/><label>Choose an icon</label><div className="icon-picker">{colorOptions.map(it => <button type="button" className={icon === it.value ? 'picked' : ''} key={it.value} aria-label={it.name} title={it.name} onClick={() => setIcon(it.value)}><TeamGlyph kind={it.value}/></button>)}</div><label>Choose a color</label><div className="color-picker">{pickColors.map(c => <button type="button" key={c} title={c} aria-label={`Color ${c}`} aria-pressed={color === c} className={`color-${c} ${color === c ? 'picked' : ''}`} onClick={() => setColor(c)}>{color === c && <Check size={18}/>}</button>)}</div><button className="primary-button" type="submit"><Check size={19}/> {category ? 'Save Team' : 'Add Team'}</button></form></Modal>;
 }
 function ReportScreen({ date, day, data, onBack, onEdit, onToast }: { date: string; day: string; data: DiaryData; onBack: () => void; onEdit: (siteId: string) => void; onToast: (text: string) => void }) {
   const entries = reportedSites(data, date);
