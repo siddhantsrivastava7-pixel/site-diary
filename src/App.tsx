@@ -5,13 +5,13 @@ import {
   ArrowLeft, ArrowRight, Archive, BadgeCheck, BrickWall, Building2, CalendarDays,
   Check, CheckCircle2, ChevronRight, Cloud, CloudOff, Copy,
   Download, FileText, Hammer, HardHat, Heart, History, House, Info, MessageCircle,
-  Minus, MoreVertical, PaintRoller, Plus, RotateCcw, Search, Settings2, ShieldCheck,
+  Minus, PaintRoller, Plus, RotateCcw, Search, Settings2, ShieldCheck,
   Sparkles, Sun, Upload, Users, Wrench, X, Zap
 } from 'lucide-react';
 import type { Category, CategoryIcon, DiaryData, Entry, Page, Panel, Site } from './types';
 import { friendlyDate, todayIST } from './lib/date';
 import { cloudConfigured, supabase } from './lib/cloud';
-import { emptyEntry, loadDiary, makeBackup, newId, saveDiary, validateDiary } from './lib/storage';
+import { emptyEntry, loadDiary, makeBackup, newId, saveDiary, starterSites, validateDiary } from './lib/storage';
 import { entryTotal, formatReport, reportedDates, reportedSites } from './lib/reports';
 
 const iconTypes = { brick: BrickWall, zap: Zap, paint: PaintRoller, hammer: Hammer, pop: HardHat, worker: Users, wrench: Wrench, building: Building2, users: Users };
@@ -180,10 +180,34 @@ export default function App() {
     const safeName = name.trim();
     if (!safeName) return false;
     if (data.sites.some(s => s.active && s.name.toLocaleLowerCase() === safeName.toLocaleLowerCase())) { showToast('This site already exists.'); return false; }
-    update(prev => ({ ...prev, sites: [...prev.sites, { id: newId(), name: safeName, location: location.trim(), active: true, createdAt: new Date().toISOString() }] }));
+    const archived = data.sites.find(s => !s.active && s.name.toLocaleLowerCase() === safeName.toLocaleLowerCase());
+    if (archived) {
+      update(prev => ({ ...prev, sites: prev.sites.map(s => s.id === archived.id ? { ...s, active: true, archivedAt: undefined, location: location.trim() || s.location } : s) }));
+    } else {
+      update(prev => ({ ...prev, sites: [...prev.sites, { id: newId(), name: safeName, location: location.trim(), active: true, createdAt: new Date().toISOString() }] }));
+    }
     showToast(`${safeName} added!`);
     setPanel(null);
     return true;
+  };
+  const addStarterSites = (names: string[]) => {
+    const clean = names.map(n => n.trim()).filter(Boolean);
+    if (!clean.length) return;
+    const baseTime = Date.now();
+    update(prev => {
+      const nextSites = prev.sites.map(s => ({ ...s }));
+      clean.forEach((siteName, index) => {
+        const existing = nextSites.find(s => s.name.toLocaleLowerCase() === siteName.toLocaleLowerCase());
+        if (existing) {
+          existing.active = true;
+          existing.archivedAt = undefined;
+        } else {
+          nextSites.push({ id: newId(), name: siteName, location: '', active: true, createdAt: new Date(baseTime + index).toISOString() });
+        }
+      });
+      return { ...prev, sites: nextSites };
+    });
+    showToast(`${clean.length} ${clean.length === 1 ? 'site' : 'sites'} ready for today!`);
   };
   const editSite = (id: string, name: string, location: string) => {
     if (!name.trim()) return;
@@ -191,9 +215,9 @@ export default function App() {
     showToast('Site updated.'); closePanel();
   };
   const archiveSite = (site: Site) => {
-    if (!window.confirm(`Mark “${site.name}” as finished?\n\nIt will disappear from today's list, but its old reports will remain saved.`)) return;
+    if (!window.confirm(`Remove “${site.name}” from today's active sites?\n\nAny old reports for this site will remain safely saved.`)) return;
     update(prev => ({ ...prev, sites: prev.sites.map(s => s.id === site.id ? { ...s, active: false, archivedAt: new Date().toISOString() } : s) }));
-    showToast('Site moved to Finished.');
+    showToast(`${site.name} removed from active sites.`);
     closePanel();
   };
   const restoreSite = (site: Site) => {
@@ -251,6 +275,7 @@ export default function App() {
   const editorSite = sitePanel ? data.sites.find(s => s.id === sitePanel.siteId) : undefined;
   const editorEntry = sitePanel ? getEntry(sitePanel.siteId, sitePanel.date) : undefined;
   const historyDays = reportedDates(data).filter(d => friendlyDate(d).toLowerCase().includes(historySearch.toLowerCase()) || d.includes(historySearch));
+  const unusedStarterSites = starterSites.filter(name => !activeSites.some(s => s.name.toLocaleLowerCase() === name.toLocaleLowerCase()));
 
   return <div className="desktop-shell">
     <div className="desktop-decoration" aria-hidden="true"><div className="desktop-brand">🏡 Site Diary</div><h2>A happier way<br/>to count the team.</h2><p>Little daily updates, beautifully organized.</p><img src="/illustrations/city.svg" alt=""/><div className="desktop-note">Made for real work. Designed for easy days. ✨</div></div>
@@ -304,16 +329,19 @@ export default function App() {
                 <div className="hero-body"><div className="hero-copy"><span className="hero-sun"><Sun size={19}/> Hello there!</span><h2>Let's count<br/>today's team.</h2><p>One site at a time. You've got this!</p></div><img className="hero-worker" src="/illustrations/worker.svg" alt="Cheerful construction worker holding a clipboard"/></div>
               </div>
               {activeSites.length > 0 && <div className="progress-card"><div className="progress-heading"><span><Sparkles size={16}/> Today's progress</span><strong>{completeCount} of {activeSites.length} sites done</strong></div><div className="progress-bar" aria-label={`${completionPercent}% completed`} role="progressbar" aria-valuenow={completionPercent} aria-valuemin={0} aria-valuemax={100}><div style={{ width: `${completionPercent}%` }}/></div><div className="stats-line"><span><Users size={17}/> {todayTotal} workers recorded</span>{isReadyToShare && <span className="all-done"><BadgeCheck size={17}/> All done!</span>}</div></div>}
-              <div className="section-row"><div><h2>My Sites <span className="section-count">{activeSites.length}</span></h2><p>Tap a site to enter today's counts</p></div><IconButton label="Add new site" className="header-add" onClick={() => setPanel({ type: 'addSite' })}><Plus size={24}/></IconButton></div>
-              {activeSites.length === 0 ? <div className="empty-block"><img src="/illustrations/empty.svg" alt="Small illustration of a colorful house"/><h3>Your notebook is ready! 🏡</h3><p>Add the sites you visit. They'll show up here every day.</p><button type="button" className="primary-button" onClick={() => setPanel({ type: 'addSite' })}><Plus size={20}/> Add your first site</button></div> : <div className="site-list">
-                {activeSites.map((site, i) => {
-                  const entry = data.days[day]?.[site.id];
-                  const complete = !!entry?.completed;
-                  return <button type="button" className={`site-card ${complete ? 'is-complete' : ''}`} onClick={() => setPanel({ type: 'site', siteId: site.id, date: day })} key={site.id}>
-                    <div className={`site-avatar avatar-${i % 5}`}><House size={27} strokeWidth={2.3}/></div><div className="site-info"><strong>{site.name}</strong><span>{complete ? (entry.noWorkers ? 'No workers today' : `${entryTotal(entry)} workers · ${Object.entries(entry.counts).filter(([, n]) => n > 0).length} teams`) : entry && Object.values(entry.counts).some(n => n > 0) ? 'Draft · Tap to finish' : 'Not entered yet'}</span></div><div className={complete ? 'site-check done' : 'site-check pending'}>{complete ? <Check size={18}/> : <ChevronRight size={21}/>}</div>
-                  </button>;
-                })}
-              </div>}
+              <div className="section-row"><div><h2>My Sites <span className="section-count">{activeSites.length}</span></h2><p>{activeSites.length ? "Tap a site to enter today's counts" : 'Choose the sites you want to track'}</p></div><IconButton label="Add new site" className="header-add" onClick={() => setPanel({ type: 'addSite' })}><Plus size={24}/></IconButton></div>
+              {activeSites.length === 0 ? <StarterSitesPicker onConfirm={addStarterSites}/> : <>
+                <div className="site-list">
+                  {activeSites.map((site, i) => {
+                    const entry = data.days[day]?.[site.id];
+                    const complete = !!entry?.completed;
+                    return <button type="button" className={`site-card ${complete ? 'is-complete' : ''}`} onClick={() => setPanel({ type: 'site', siteId: site.id, date: day })} key={site.id}>
+                      <div className={`site-avatar avatar-${i % 5}`}><House size={27} strokeWidth={2.3}/></div><div className="site-info"><strong>{site.name}</strong><span>{complete ? (entry.noWorkers ? 'No workers today' : `${entryTotal(entry)} workers · ${Object.entries(entry.counts).filter(([, n]) => n > 0).length} teams`) : entry && Object.values(entry.counts).some(n => n > 0) ? 'Draft · Tap to finish' : 'Not entered yet'}</span></div><div className={complete ? 'site-check done' : 'site-check pending'}>{complete ? <Check size={18}/> : <ChevronRight size={21}/>}</div>
+                    </button>;
+                  })}
+                </div>
+                <button type="button" className="manage-sites-inline" onClick={() => setPage('sites')}><Building2 size={16}/> Add or remove sites</button>
+              </>}
               {activeSites.length > 0 && <div className="share-card"><div className="share-card-copy"><strong>{isReadyToShare ? 'All sites are ready! 🎉' : 'Ready to send your report?'}</strong><span>{isReadyToShare ? 'Your daily report is prepared.' : `${activeSites.length - completeCount} ${activeSites.length - completeCount === 1 ? 'site' : 'sites'} still to complete`}</span></div><button className="primary-button" type="button" disabled={!isReadyToShare} onClick={() => setPanel({ type: 'report', date: day })}><MessageCircle size={21}/> Review &amp; Share <ArrowRight size={18}/></button>{!isReadyToShare && <span className="share-tip">Finish every site (including zero-worker sites) to share.</span>}</div>}
               <div className="sync-footnote"><ShieldCheck size={15}/>{status}. <button type="button" onClick={() => setPage('settings')}>Backup options</button></div>
             </>}
@@ -327,11 +355,15 @@ export default function App() {
               })}</div> : <div className="empty-block history-empty"><div className="big-emoji">🗓️</div><h3>{historySearch ? 'No matching dates' : 'Your reports will appear here'}</h3><p>{historySearch ? 'Try another date or clear your search.' : 'Once you finish your first site, its report is saved here automatically.'}</p></div>}
             </>}
             {page === 'sites' && <>
-              <div className="heading-with-art"><PageTitle subtitle="Keep your projects neatly organized.">My Sites</PageTitle><div className="heading-emoji">🏘️</div></div>
-              <div className="segmented"><button type="button" className={!archivedTab ? 'selected' : ''} onClick={() => setArchivedTab(false)}>Active <span>{activeSites.length}</span></button><button type="button" className={archivedTab ? 'selected' : ''} onClick={() => setArchivedTab(true)}>Finished <span>{data.sites.filter(s => !s.active).length}</span></button></div>
-              {data.sites.filter(s => s.active !== archivedTab).length ? <div className="manage-list">{data.sites.filter(s => s.active !== archivedTab).map((site, index) => <div className="manage-card" key={site.id}><div className={`site-avatar avatar-${index % 5}`}><Building2 size={23}/></div><div className="manage-info"><strong>{site.name}</strong><span>{site.location || (site.active ? 'Active project' : 'Finished project')}</span></div>{site.active ? <IconButton label={`Edit ${site.name}`} onClick={() => setPanel({ type: 'editSite', siteId: site.id })}><MoreVertical size={20}/></IconButton> : <IconButton label={`Reactivate ${site.name}`} onClick={() => restoreSite(site)}><RotateCcw size={19}/></IconButton>}</div>)}</div> : <div className="empty-block compact-empty"><div className="big-emoji">{archivedTab ? '📦' : '🏡'}</div><h3>{archivedTab ? 'No finished sites yet' : 'No active sites yet'}</h3><p>{archivedTab ? 'When a project finishes, archive it to keep today tidy.' : 'Add a site to start counting workers.'}</p></div>}
+              <div className="heading-with-art"><PageTitle subtitle="Add, rename, or remove sites from your daily list.">My Sites</PageTitle><div className="heading-emoji">🏘️</div></div>
+              <div className="segmented"><button type="button" className={!archivedTab ? 'selected' : ''} onClick={() => setArchivedTab(false)}>Active <span>{activeSites.length}</span></button><button type="button" className={archivedTab ? 'selected' : ''} onClick={() => setArchivedTab(true)}>Removed / Finished <span>{data.sites.filter(s => !s.active).length}</span></button></div>
+              {!archivedTab && activeSites.length === 0 ? <StarterSitesPicker onConfirm={addStarterSites}/> : data.sites.filter(s => s.active !== archivedTab).length ? <div className="manage-list">{data.sites.filter(s => s.active !== archivedTab).map((site, index) => <div className="manage-card" key={site.id}><div className={`site-avatar avatar-${index % 5}`}><Building2 size={23}/></div><div className="manage-info"><strong>{site.name}</strong><span>{site.location || (site.active ? 'Active project' : 'Removed from daily list')}</span></div>{site.active ? <div className="manage-actions"><button type="button" className="mini-action" aria-label={`Edit ${site.name}`} onClick={() => setPanel({ type: 'editSite', siteId: site.id })}>Edit</button><button type="button" className="mini-action danger-mini" aria-label={`Remove ${site.name}`} onClick={() => archiveSite(site)}>Remove</button></div> : <button type="button" className="mini-action restore-mini" aria-label={`Add back ${site.name}`} onClick={() => restoreSite(site)}><RotateCcw size={14}/> Add back</button>}</div>)}</div> : <div className="empty-block compact-empty"><div className="big-emoji">{archivedTab ? '📦' : '🏡'}</div><h3>{archivedTab ? 'No removed sites' : 'No active sites yet'}</h3><p>{archivedTab ? 'Sites you remove from your daily list stay here so old reports remain safe.' : 'Add a site to start counting workers.'}</p></div>}
+              {!archivedTab && activeSites.length > 0 && unusedStarterSites.length > 0 && <div className="quick-add-box">
+                <div className="quick-add-head"><strong>Quick-add from your sites</strong><span>Tap any site to add it to Today</span></div>
+                <div className="quick-add-chips">{unusedStarterSites.map(name => <button type="button" key={name} className="quick-chip" onClick={() => addSite(name, '')}><Plus size={15}/> {name}</button>)}</div>
+              </div>}
               <button type="button" className="yellow-button full-width" onClick={() => setPanel({ type: 'addSite' })}><Plus size={22}/> Add New Site</button>
-              <div className="helper-box"><Info size={18}/><p>Sites normally stay here for months. When work ends, move them to <strong>Finished</strong>; old reports stay safe.</p></div>
+              <div className="helper-box"><Info size={18}/><p>You can add or remove sites anytime. Removing a site hides it from Today while keeping its past reports safe.</p></div>
               <button type="button" className="text-settings-link" onClick={() => setPage('settings')}><Settings2 size={17}/> Manage departments &amp; contractors <ChevronRight size={18}/></button>
             </>}
             {page === 'settings' && <>
@@ -364,10 +396,55 @@ export default function App() {
   </div>;
 }
 
+function StarterSitesPicker({ onConfirm }: { onConfirm: (names: string[]) => void }) {
+  const [options, setOptions] = useState<string[]>(() => [...starterSites]);
+  const [selected, setSelected] = useState<string[]>(() => [...starterSites]);
+  const [customName, setCustomName] = useState('');
+  const toggleSite = (name: string) => {
+    setSelected(prev => prev.includes(name) ? prev.filter(n => n !== name) : [...prev, name]);
+  };
+  const addCustom = () => {
+    const clean = customName.trim();
+    if (!clean) return;
+    if (!options.some(n => n.toLocaleLowerCase() === clean.toLocaleLowerCase())) {
+      setOptions(prev => [...prev, clean]);
+    }
+    if (!selected.some(n => n.toLocaleLowerCase() === clean.toLocaleLowerCase())) {
+      setSelected(prev => [...prev, clean]);
+    }
+    setCustomName('');
+  };
+  const chosenInOrder = options.filter(name => selected.includes(name));
+  return <section className="starter-card" aria-label="Choose your sites">
+    <div className="starter-header">
+      <div className="starter-badge">🏡 Ready to start</div>
+      <h3>Continue with your sites</h3>
+      <p>Tap any site to remove or keep it, or add a new site below.</p>
+    </div>
+    <div className="starter-list">
+      {options.map((name, i) => {
+        const isPicked = selected.includes(name);
+        return <button type="button" key={name} className={`starter-item ${isPicked ? 'is-picked' : 'is-unpicked'}`} aria-pressed={isPicked} onClick={() => toggleSite(name)}>
+          <span className="starter-num">{i + 1}</span>
+          <strong className="starter-name">{name}</strong>
+          <span className={`starter-check ${isPicked ? 'checked' : ''}`}>{isPicked ? <Check size={17}/> : <Plus size={17}/>}</span>
+        </button>;
+      })}
+    </div>
+    <div className="starter-add-row">
+      <input type="text" maxLength={120} value={customName} onChange={e => setCustomName(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addCustom(); } }} placeholder="Add another site name…" aria-label="Add another site name"/>
+      <button type="button" className="outline-button" disabled={!customName.trim()} onClick={addCustom}><Plus size={18}/> Add</button>
+    </div>
+    <button type="button" className="primary-button full-width" disabled={chosenInOrder.length === 0} onClick={() => onConfirm(chosenInOrder)}>
+      <CheckCircle2 size={21}/> {chosenInOrder.length > 0 ? `Continue with ${chosenInOrder.length} ${chosenInOrder.length === 1 ? 'site' : 'sites'}` : 'Select at least 1 site'}
+    </button>
+  </section>;
+}
+
 function SiteForm({ site, onClose, onSubmit, onArchive }: { site?: Site; onClose: () => void; onSubmit: (name: string, location: string) => boolean; onArchive?: () => void }) {
   const [name, setName] = useState(site?.name || '');
   const [location, setLocation] = useState(site?.location || '');
-  return <Modal title={site ? 'Edit Site' : 'Add a New Site'} onClose={onClose}><form className="form-stack" onSubmit={e => { e.preventDefault(); onSubmit(name, location); }}><div className="form-illustration">🏡 <span>{site ? 'Make an update' : 'A new project!'}</span></div><label htmlFor="site-name">Site name <span className="required">*</span></label><input id="site-name" autoFocus required maxLength={120} value={name} onChange={e => setName(e.target.value)} placeholder="e.g. Sethi Ji"/><label htmlFor="site-location">Location / Address <span className="optional">Optional</span></label><input id="site-location" maxLength={200} value={location} onChange={e => setLocation(e.target.value)} placeholder="e.g. Civil Lines"/><p className="form-hint">Use a familiar name so the site is easy to recognize.</p><button className="primary-button" type="submit"><Check size={20}/> {site ? 'Save Changes' : 'Add Site'}</button>{site && onArchive && <button className="archive-button" type="button" onClick={onArchive}><Archive size={17}/> Mark this site as finished</button>}</form></Modal>;
+  return <Modal title={site ? 'Edit Site' : 'Add a New Site'} onClose={onClose}><form className="form-stack" onSubmit={e => { e.preventDefault(); onSubmit(name, location); }}><div className="form-illustration">🏡 <span>{site ? 'Make an update' : 'A new project!'}</span></div><label htmlFor="site-name">Site name <span className="required">*</span></label><input id="site-name" autoFocus required maxLength={120} value={name} onChange={e => setName(e.target.value)} placeholder="e.g. Sethi Ji"/><label htmlFor="site-location">Location / Address <span className="optional">Optional</span></label><input id="site-location" maxLength={200} value={location} onChange={e => setLocation(e.target.value)} placeholder="e.g. Civil Lines"/><p className="form-hint">Use a familiar name so the site is easy to recognize.</p><button className="primary-button" type="submit"><Check size={20}/> {site ? 'Save Changes' : 'Add Site'}</button>{site && onArchive && <button className="archive-button" type="button" onClick={onArchive}><Archive size={17}/> Remove from active sites</button>}</form></Modal>;
 }
 function CategoryForm({ category, onClose, onSubmit }: { category?: Category; onClose: () => void; onSubmit: (value: { name: string; icon: CategoryIcon; color: string }) => void }) {
   const [name, setName] = useState(category?.name || '');

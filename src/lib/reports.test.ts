@@ -1,16 +1,27 @@
 import { describe, it, expect } from 'vitest';
 import { todayIST } from './date';
-import { emptyDiary, emptyEntry, validateDiary } from './storage';
+import { emptyDiary, emptyEntry, starterSites, validateDiary } from './storage';
 import { entryTotal, formatReport, reportedDates } from './reports';
 
 describe('daily diary behavior', () => {
   it('uses India dates around UTC midnight', () => {
     expect(todayIST(new Date('2026-10-07T20:00:00Z'))).toBe('2026-10-08');
   });
-  it('starts with zero sites and no daily workers', () => {
+  it('starts with zero sites and no daily workers, and provides the 9 starter sites', () => {
     const d = emptyDiary();
     expect(d.sites).toHaveLength(0);
     expect(d.days).toEqual({});
+    expect(starterSites).toEqual([
+      'Sethi Ji',
+      'Usha Singh',
+      'Kanodia Ji',
+      'Bansal Ji',
+      "Tina Ma'am",
+      'Mayank Sir',
+      'V.S.S.D',
+      "Faizy Ma'am",
+      'Kuber Sir'
+    ]);
   });
   it('formats only positive count categories and keeps remarks', () => {
     const d = emptyDiary();

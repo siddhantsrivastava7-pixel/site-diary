@@ -9,6 +9,17 @@ export const defaultCategories: Category[] = [
   { id: 'pop', name: 'POP', icon: 'pop', color: 'violet', active: true },
   { id: 'ramu', name: 'Ramu', icon: 'worker', color: 'mint', active: true }
 ];
+export const starterSites: string[] = [
+  'Sethi Ji',
+  'Usha Singh',
+  'Kanodia Ji',
+  'Bansal Ji',
+  "Tina Ma'am",
+  'Mayank Sir',
+  'V.S.S.D',
+  "Faizy Ma'am",
+  'Kuber Sir'
+];
 export function emptyDiary(): DiaryData {
   return { version: 1, sites: [], categories: defaultCategories.map(c => ({ ...c })), days: {}, updatedAt: new Date().toISOString() };
 }
