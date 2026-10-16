@@ -13,6 +13,7 @@ import { friendlyDate, todayIST } from './lib/date';
 import { cloudConfigured, supabase } from './lib/cloud';
 import { emptyEntry, loadDiary, makeBackup, newId, saveDiary, starterSites, validateDiary } from './lib/storage';
 import { entryTotal, formatReport, reportedDates, reportedSites } from './lib/reports';
+import { Documents } from './features/documents/Documents.tsx';
 
 const iconTypes = { brick: BrickWall, zap: Zap, paint: PaintRoller, hammer: Hammer, pop: HardHat, worker: Users, wrench: Wrench, building: Building2, users: Users };
 const pickColors = ['coral', 'yellow', 'blue', 'peach', 'violet', 'mint'];
@@ -423,8 +424,9 @@ export default function App() {
               {storageError && <div className="notice warn"><Info size={19}/> Your browser cannot save data. Check private browsing or available storage, and export a backup.</div>}
               <div className="footer-signoff"><Heart size={16}/> Made with care for everyday work <span>Site Diary v1.0</span></div>
             </>}
+            {page === 'documents' && <Documents data={data} onUpdate={update} notify={showToast} />}
           </main>
-          <nav className="tab-bar" aria-label="Main navigation"><button className={page === 'today' ? 'active' : ''} type="button" onClick={() => setPage('today')}><House size={23}/><span>Today</span></button><button className={page === 'history' ? 'active' : ''} type="button" onClick={() => setPage('history')}><History size={23}/><span>History</span></button><button className={page === 'sites' ? 'active' : ''} type="button" onClick={() => setPage('sites')}><Users size={23}/><span>My Sites</span></button></nav>
+          <nav className="tab-bar" aria-label="Main navigation"><button className={page === 'today' ? 'active' : ''} type="button" onClick={() => setPage('today')}><House size={23}/><span>Today</span></button><button className={page === 'history' ? 'active' : ''} type="button" onClick={() => setPage('history')}><History size={23}/><span>History</span></button><button className={page === 'sites' ? 'active' : ''} type="button" onClick={() => setPage('sites')}><Users size={23}/><span>My Sites</span></button><button className={page === 'documents' ? 'active' : ''} type="button" onClick={() => setPage('documents')}><FileText size={23}/><span>Documents</span></button></nav>
         </>
       )}
 

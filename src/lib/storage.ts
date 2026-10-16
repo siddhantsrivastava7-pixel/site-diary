@@ -1,4 +1,5 @@
 import type { Category, DiaryData, Entry, Site } from '../types';
+import { emptyDocumentFields, validateDocumentFields } from '../features/documents/migration';
 
 export const STORAGE_KEY = 'site-diary-data-v1';
 export const defaultCategories: Category[] = [
@@ -21,7 +22,7 @@ export const starterSites: string[] = [
   'Kuber Sir'
 ];
 export function emptyDiary(): DiaryData {
-  return { version: 1, sites: [], categories: defaultCategories.map(c => ({ ...c })), days: {}, updatedAt: new Date().toISOString() };
+  return { version: 1, sites: [], categories: defaultCategories.map(c => ({ ...c })), days: {}, updatedAt: new Date().toISOString(), ...emptyDocumentFields() };
 }
 export function newId(): string { return crypto.randomUUID(); }
 export function emptyEntry(): Entry {
@@ -58,7 +59,7 @@ export function validateDiary(raw: unknown): DiaryData {
     }
   }
   // Site/category identifiers are stored, never user-supplied HTML.
-  return { version: 1, sites, categories, days, updatedAt: typeof raw.updatedAt === 'string' ? raw.updatedAt : new Date().toISOString() };
+  return { version: 1, sites, categories, days, updatedAt: typeof raw.updatedAt === 'string' ? raw.updatedAt : new Date().toISOString(), ...validateDocumentFields(raw) };
 }
 export function loadDiary(): DiaryData {
   try { const saved = localStorage.getItem(STORAGE_KEY); return saved ? validateDiary(JSON.parse(saved)) : emptyDiary(); }
